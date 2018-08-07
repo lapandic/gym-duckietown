@@ -13,6 +13,7 @@ import numpy as np
 import gym
 import gym_duckietown
 from gym_duckietown.envs import DuckietownEnv
+from gym_duckietown.wrappers import LoggingWrapper
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--env-name', default=None)
@@ -22,6 +23,7 @@ parser.add_argument('--draw-bbox', action='store_true', help='draw collision det
 parser.add_argument('--domain-rand', action='store_true', help='enable domain randomization')
 parser.add_argument('--frame-skip', default=1, type=int, help='number of frames to skip')
 args = parser.parse_args()
+
 
 if args.env_name is None:
     env = DuckietownEnv(
@@ -33,6 +35,8 @@ if args.env_name is None:
     )
 else:
     env = gym.make(args.env_name)
+
+env = LoggingWrapper(env)
 
 env.reset()
 env.render()
@@ -72,9 +76,9 @@ def update(dt):
     if key_handler[key.DOWN]:
         action = np.array([-0.4, 0])
     if key_handler[key.LEFT]:
-        action = np.array([0.6, +1])
+        action = np.array([0.0, +1])
     if key_handler[key.RIGHT]:
-        action = np.array([0.6, -1])
+        action = np.array([0.0, -1])
     if key_handler[key.SPACE]:
         action = np.array([0, 0])
 
