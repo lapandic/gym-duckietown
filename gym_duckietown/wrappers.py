@@ -5,6 +5,11 @@ import h5py
 import os
 from gym import spaces
 
+CAMERA_HEIGHT = 120
+CAMERA_WIDTH = 160
+
+
+
 class DiscreteWrapper(gym.ActionWrapper):
     """
     Duckietown environment with discrete actions (left, right, forward)
@@ -65,28 +70,16 @@ class LoggingWrapper(gym.Wrapper):
         self.chunk_size = 1024
         self.initial_size = 0
         self.tags = {
-                    'Images': [(self.initial_size, 120, 160, 3), 'i1'],
-                     'Reward': [(self.initial_size, 1), 'float'],
-                     'Output': [(self.initial_size, 2), 'float'],
-                     'Position': [(self.initial_size, 3), 'float'],
-                     'Angle': [(self.initial_size,), 'float'],
-                     'Velocity': [(self.initial_size,), 'float'],
-                     'Ref-Position': [(self.initial_size, 3), 'float']}
-        self.buffer = {
-                     'Images': np.zeros((self.chunk_size, 120, 160, 3),
-                        dtype=np.dtype('i1')),
-                     'Reward': np.zeros((self.chunk_size, 1),
-                        dtype='float'),
-                     'Output': np.zeros((self.chunk_size, 2),
-                        dtype='float'),
-                     'Position': np.zeros((self.chunk_size, 3),
-                        dtype='float'),
-                     'Angle': np.zeros((self.chunk_size,),
-                        dtype='float'),
-                     'Velocity': np.zeros((self.chunk_size,),
-                        dtype='float'),
-                     'Ref-Position': np.zeros((self.chunk_size, 3),
-                        dtype='float')}
+                    'Images': [[self.initial_size, CAMERA_HEIGHT, CAMERA_WIDTH, 3], np.uint8],
+                     'Reward': [[self.initial_size, 1], np.float32],
+                     'Output': [[self.initial_size, 2], np.float32],
+                     'Position': [[self.initial_size, 3], np.float32],
+                     'Angle': [[self.initial_size], np.float32],
+                     'Velocity': [[self.initial_size], np.float32],
+                     'Ref-Position': [[self.initial_size, 3], np.float32]}
+
+        self.buffer = {k: np.zeros(tuple([self.chunk_size]+v[0][1:]),
+                        dtype=v[1]) for (k,v) in self.tags.items()}
         self.buffer_counter = 0
 
         if not os.path.exists(self.data_folder):
