@@ -325,15 +325,19 @@ class Simulator(gym.Env):
 
         # Keep trying to find a valid spawn position on this tile
         while True:
-            i, j = tile['coords']
+
+            tile_idx = self.np_random.randint(0, len(self.drivable_tiles))
+            tile = self.drivable_tiles[tile_idx]
+            i, j = tile['coords']  # 1, 1 works
 
             # Choose a random position on this tile
             x = self.np_random.uniform(i, i + 1) * ROAD_TILE_SIZE
-            z = self.np_random.uniform(j, j + 1) * ROAD_TILE_SIZE
+            z =  self.np_random.uniform(j, j + 1) * ROAD_TILE_SIZE
             self.cur_pos = np.array([x, 0, z])
 
             # Choose a random direction
-            self.cur_angle = self.np_random.uniform(0, 2 * math.pi)
+            angle = tile['angle']
+            self.cur_angle = angle * np.pi / 2.0 + self.np_random.uniform(0, math.pi / 4.0)
 
             # If this is too close to an object or not a valid pose, retry
             if self._inconvenient_spawn() or not self._valid_pose(1.3):
@@ -620,6 +624,89 @@ class Simulator(gym.Env):
 
         return i, j
 
+    def _get_bezier_trajectory(self, pts, n_bezier_points=10):
+        pts = pts
+        t = np.arange(0, n_bezier_points) * 1.0/n_bezier_points
+        t = t[:, np.newaxis]
+        trajectory = (1-t)**3 * pts[0] + 3*(1-t)**2 * t * pts[1] + \
+                3 * (1-t)*t**2 * pts[2] + t**3 * pts[3]
+        assert(trajectory.shape == (n_bezier_points, 3))
+
+        return trajectory
+
+    def _get_ref_trajectory(self, i, j):
+        """
+        Get the Bezier curve control points for a given tile and the next tile
+        and join the trajectories.
+        """
+        # Tile 1
+        tile = self._get_tile(i, j)
+        assert(tile is not None)
+        kind = tile['kind']
+        angle = tile['angle']
+        new_angle = angle
+
+        if kind.startswith('straight') or kind.startswith('3way') or kind.startswith('4way'):
+            pts = np.array([
+                [-0.20, 0,-0.50],
+                [-0.20, 0,-0.25],
+                [-0.20, 0, 0.25],
+                [-0.20, 0, 0.50],
+            ]) * ROAD_TILE_SIZE
+        elif kind == 'curve_left':
+            pts = np.array([
+                [-0.20, 0,-0.50],
+                [-0.20, 0, 0.00],
+                [ 0.00, 0, 0.20],
+                [ 0.50, 0, 0.20],
+            ]) * ROAD_TILE_SIZE
+            new_angle += 1
+            if new_angle > 3:
+                new_angle -= 4
+        elif kind == 'curve_right':
+            pts = np.array([
+                [-0.20, 0,-0.50],
+                [-0.20, 0,-0.20],
+                [-0.30, 0,-0.20],
+                [-0.50, 0,-0.20],
+            ]) * ROAD_TILE_SIZE
+            new_angle -= 1
+            if new_angle < 0:
+                new_angle += 4
+        else:
+            assert False, kind
+
+        mat = gen_rot_matrix(np.array([0, 1, 0]), angle * math.pi / 2)
+
+        pts = np.matmul(pts, mat)
+        pts += np.array([(i+0.5) * ROAD_TILE_SIZE, 0, (j+0.5) * ROAD_TILE_SIZE])
+
+        traj1 = self._get_bezier_trajectory(pts)
+
+        # Tile 2
+        # angle and kind determine where Duckiebot ends up
+        # assume going "straight" then new tile
+        # (x, 0, z) + ROAD_TILE_SIZE * (0, 0. 1) * rot(angle) around  (0 ,1 ,0)
+        # if right turn angle += 1 if > 3 - 4
+        # if left turn angle -= 1 if < 0 +4
+        # check for drivability: _drivable_pos(pos)
+        pos = np.array([(i+0.5) * ROAD_TILE_SIZE, 0, (j+0.5) * ROAD_TILE_SIZE])
+
+        mat = gen_rot_matrix(np.array([0, -1, 0]), new_angle * np.pi / 2.0)
+
+        pos_new = pos + ROAD_TILE_SIZE * np.matmul(mat, np.array([0, 0, 1.0]))
+
+
+        i_new, j_new = self.get_grid_coords(pos_new)
+
+        pts2 = self._get_curve(i_new, j_new)
+        traj2 = self._get_bezier_trajectory(pts2)
+
+        trajectory = np.append(traj1, traj2, axis=0)
+
+        return trajectory
+
+
     def _get_curve(self, i, j):
         """
         Get the Bezier curve control points for a given tile
@@ -687,12 +774,14 @@ class Simulator(gym.Env):
         """
 
         i, j = self.get_grid_coords(pos)
+        tile = self._get_tile(i, j)
 
-        if self._get_tile(i, j) is None:
+        if tile is None or not tile['drivable']:
             return None, None
 
         cps = self._get_curve(i, j)
-        t = bezier_closest(cps, self.cur_pos)
+        # trajectory = self._get_ref_trajectory(i, j)
+        t = bezier_closest(cps, pos)
         point = bezier_point(cps, t)
         tangent = bezier_tangent(cps, t)
 
@@ -937,12 +1026,6 @@ class Simulator(gym.Env):
             +40 * col_penalty
         )
         done = False
-
-        # if self.step_count % STEPSPERSAVE == 0:
-        #     # Saving data
-        #     datalogger.add(img=obs, reward=reward, output=action,
-        #                    position=self.cur_pos, angle= self.cur_angle,
-        #                    velocity=self.speed, ref_pos=curve_point, n_chunk=1)
 
         return obs, reward, done, {}
 
