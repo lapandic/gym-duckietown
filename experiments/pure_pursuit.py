@@ -14,12 +14,14 @@ import argparse
 import numpy as np
 import gym
 from gym_duckietown.envs import DuckietownEnv
+from gym_duckietown.wrappers import LoggingWrapper
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--env-name', default=None)
 parser.add_argument('--map-name', default='udem1')
 parser.add_argument('--no-pause', action='store_true', help="don't pause on failure")
 parser.add_argument('--draw-bbox', default=False)
+parser.add_argument('--log-data', default=True)
 args = parser.parse_args()
 
 if args.env_name is None:
@@ -31,9 +33,14 @@ if args.env_name is None:
 else:
     env = gym.make(args.env_name)
 
+if args.log_data is True:
+    env = LoggingWrapper(env)
+    print("Data logger is being used!")
+
 obs = env.reset()
 env.render()
 
+#TODO: Move function to planning utilities
 
 def se2(pose):
     """

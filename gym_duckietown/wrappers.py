@@ -4,6 +4,7 @@ import gym
 import h5py
 import os
 from gym import spaces
+from datetime import datetime
 
 CAMERA_HEIGHT = 120
 CAMERA_WIDTH = 160
@@ -63,20 +64,24 @@ class LoggingWrapper(gym.Wrapper):
         - The ideal rule-based trajectory
     """
 
-    def __init__(self, env=None):
-        super().__init__(env)
+    def __init__(self, env):
+        super(LoggingWrapper, self).__init__(env)
         self.data_folder = 'recordings'
         self.path = self.data_folder + '/data.hdf5'
         self.chunk_size = 1024
         self.initial_size = 0
         self.tags = {
-                    'Images': [[self.initial_size, CAMERA_HEIGHT, CAMERA_WIDTH, 3], np.uint8],
-                     'Reward': [[self.initial_size, 1], np.float32],
-                     'Output': [[self.initial_size, 2], np.float32],
-                     'Position': [[self.initial_size, 3], np.float32],
-                     'Angle': [[self.initial_size], np.float32],
-                     'Velocity': [[self.initial_size], np.float32],
-                     'Ref-Position': [[self.initial_size, 3], np.float32]}
+                     'image': [[self.initial_size, CAMERA_HEIGHT, CAMERA_WIDTH, 3], np.uint8],
+                     'reward': [[self.initial_size, 1], np.float32],
+                     'actions': [[self.initial_size, 2], np.float32],
+                     'position': [[self.initial_size, 3], np.float32],
+                     'dir': [[self.initial_size], np.float32],
+                     'speed': [[self.initial_size], np.float32],
+                     'ref_position': [[self.initial_size, 3], np.float32],
+                     'ref_dir': [[self.initial_size], np.float32],
+                     # 'time_stamp': [[self.initial_size], np.string_]
+                    }
+
 
         self.buffer = {k: np.zeros(tuple([self.chunk_size]+v[0][1:]),
                         dtype=v[1]) for (k,v) in self.tags.items()}
@@ -103,11 +108,15 @@ class LoggingWrapper(gym.Wrapper):
 
     def step(self, action):
         observation, reward, done, info = self.env.step(action)
-        point, tangent = self.env.closest_curve_point(self.env.cur_pos)
+        ref_point, tangent = self.env.closest_curve_point(self.env.cur_pos)
+        i, j = self.env.get_grid_coords(self.env.cur_pos)
+        tile = self.env._get_tile(i, j)
+        tile_angle = tile['angle'] * np.pi / 2.0
 
         input_data = dict(zip(self.tags.keys(), [observation, reward, action,
                           self.env.cur_pos, self.env.cur_angle,
-                          self.env.speed, point]))
+                          self.env.speed, ref_point, tile_angle,
+                          datetime.now().strftime('%Y-%m-%d %H:%M:%S')]))
         for tag in self.buffer:
             self.buffer[tag][self.buffer_counter] = input_data[tag]
 
@@ -123,3 +132,23 @@ class LoggingWrapper(gym.Wrapper):
                     f.flush()
 
         return observation, reward, done, info
+
+    #TODO: Are the functions below strictly necessary?
+    def get_grid_coords(self, position):
+        return self.env.get_grid_coords(position)
+
+    def __getattr__(self, attr):
+        if attr == 'cur_pos':
+            return self.env.cur_pos
+        elif attr == 'cur_angle':
+            return self.env.cur_angle
+        else:
+            AttributeError("Wrong attribute")
+
+    def _get_ref_trajectory(self, i, j):
+        return self.env._get_ref_trajectory(i, j)
+
+    def reset(self, **kwargs):
+        observation = self.env.reset(**kwargs)
+        return observation
+
