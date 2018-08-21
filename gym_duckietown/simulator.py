@@ -336,8 +336,8 @@ class Simulator(gym.Env):
             self.cur_pos = np.array([x, 0, z])
 
             # Choose a random direction
-            angle = tile['angle']
-            self.cur_angle = angle * np.pi / 2.0 + self.np_random.uniform(0, math.pi / 4.0)
+            tile_angle = tile['angle']
+            self.cur_angle = tile_angle * np.pi / 2.0 + self.np_random.uniform(0, math.pi / 4.0)
 
             # If this is too close to an object or not a valid pose, retry
             if self._inconvenient_spawn() or not self._valid_pose(1.3):
@@ -689,13 +689,12 @@ class Simulator(gym.Env):
         # (x, 0, z) + ROAD_TILE_SIZE * (0, 0. 1) * rot(angle) around  (0 ,1 ,0)
         # if right turn angle += 1 if > 3 - 4
         # if left turn angle -= 1 if < 0 +4
-        # check for drivability: _drivable_pos(pos)
+
         pos = np.array([(i+0.5) * ROAD_TILE_SIZE, 0, (j+0.5) * ROAD_TILE_SIZE])
 
         mat = gen_rot_matrix(np.array([0, -1, 0]), new_angle * np.pi / 2.0)
 
         pos_new = pos + ROAD_TILE_SIZE * np.matmul(mat, np.array([0, 0, 1.0]))
-
 
         i_new, j_new = self.get_grid_coords(pos_new)
 
@@ -977,7 +976,7 @@ class Simulator(gym.Env):
 
     def step(self, action):
         # Actions could be a Python list
-        assert(1==0, "this should not be used")
+        assert(1 == 2, "this should not be used")
         action = np.array(action)
 
         delta_time = 1 / self.frame_rate
