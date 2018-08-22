@@ -38,7 +38,7 @@ WALL_COLOR = np.array([0.64, 0.71, 0.28])
 GROUND_COLOR = np.array([0.15, 0.15, 0.15])
 
 # Angle at which the camera is pitched downwards
-CAMERA_ANGLE = 20
+CAMERA_ANGLE = 5
 
 # Camera field of view angle in the Y direction
 # Note: robot uses Raspberri Pi camera module V1.3
@@ -1189,6 +1189,7 @@ class Simulator(gym.Env):
         )
 
         # Display position/state information
+        """
         if mode != "free_cam":
             x, y, z = self.cur_pos
             self.text_label.text = "pos: (%.2f, %.2f, %.2f), angle: %d, steps: %d, speed: %.2f m/s" % (
@@ -1198,6 +1199,7 @@ class Simulator(gym.Env):
                 self.speed
             )
             self.text_label.draw()
+        """
 
         # Force execution of queued commands
         glFlush()
