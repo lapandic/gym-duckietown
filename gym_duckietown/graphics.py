@@ -262,17 +262,11 @@ def bezier_closest(cps, p, t_bot=0, t_top=1, n=8):
 
     return bezier_closest(cps, p, mid, t_top, n-1)
 
-def bezier_draw(cps, n = 20, red=False):
+def bezier_draw(cps, n = 20):
     pts = [bezier_point(cps, i/(n-1)) for i in range(0,n)]
     glBegin(GL_LINE_STRIP)
-
-    if red:
-        glColor3f(1, 0, 0)
-    else:
-        glColor3f(0, 0, 1)
-
+    glColor3f(1, 0, 0)
     for i, p in enumerate(pts):
         glVertex3f(*p)
-
     glEnd()
     glColor3f(1,1,1)
