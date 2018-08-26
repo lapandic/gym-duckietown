@@ -108,7 +108,7 @@ if __name__ == "__main__":
 
     load_data(args.map_name)
 
-    env = DuckietownEnv(map_name=args.map_name)
+    env = DuckietownEnv(map_name=args.map_name, domain_rand=False)
 
     model = Model()
     model.train()
@@ -124,7 +124,7 @@ if __name__ == "__main__":
     )
 
     avg_loss = 0
-    num_epochs = 2000000
+    num_epochs = 100000
 
     for epoch in range(1, num_epochs+1):
         optimizer.zero_grad()

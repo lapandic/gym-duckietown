@@ -4,6 +4,7 @@
 Control the simulator or Duckiebot using a a PID controller (heuristic).
 """
 
+import json
 import time
 import sys
 import argparse
@@ -30,6 +31,50 @@ else:
 obs = env.reset()
 env.render()
 
+def write_to_file(demos):
+    num_steps = 0
+    for demo in demos:
+        num_steps += len(demo['actions'])
+    print('num demos:', len(demos))
+    print('num steps:', num_steps)
+
+    # Store the trajectories in a JSON file
+    with open('experiments/demos_{}.json'.format(args.map_name), 'w') as outfile:
+        json.dump({ 'demos': demos }, outfile)
+
+def process_recording():
+    global positions, actions, demos
+
+    if len(positions) == 0:
+        # Nothing to delete
+        if len(demos) == 0:
+            return
+
+        # Remove the last recorded demo
+        demos.pop()
+        write_to_file(demos)
+        return
+
+    p = list(map(lambda p: [ p[0].tolist(), p[1] ], positions))
+    #a = list(map(lambda a: a.tolist(), actions))
+    a = actions
+
+    assert len(p) == len(a)
+
+    demo = {
+        'positions': p,
+        'actions': a
+    }
+
+    demos.append(demo)
+
+    # Write all demos to this moment
+    write_to_file(demos)
+
+positions = []
+actions = []
+demos = []
+
 while True:
 
     follow_dist = 0.4
@@ -54,10 +99,16 @@ while True:
     point_vec /= np.linalg.norm(point_vec)
 
     dot = np.dot(env.get_right_vec(), point_vec)
-    velocity = 0.35
-    steering = 2 * -dot
+    velocity = 0.6
+    steering = 3 * -dot
 
-    obs, reward, done, info = env.step([velocity, steering])
+    action = [velocity, steering]
+
+    positions.append((env.unwrapped.cur_pos, env.unwrapped.cur_angle))
+    actions.append(action)
+    assert len(positions) == len(actions)
+
+    obs, reward, done, info = env.step(action)
     #print('stepCount = %s, reward=%.3f' % (env.stepCount, reward))
 
     env.render()
@@ -67,5 +118,10 @@ while True:
             print('*** FAILED ***')
             if not args.no_pause:
                 time.sleep(0.7)
+        else:
+            process_recording()
+        positions = []
+        actions = []
+
         obs = env.reset()
         env.render()

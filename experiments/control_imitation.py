@@ -29,9 +29,10 @@ args = parser.parse_args()
 if args.env_name is None:
     env = DuckietownEnv(
         map_name = args.map_name,
-        domain_rand = not args.no_random
+        domain_rand = not args.no_random,
+        frame_rate = 15
     )
-    env.max_steps = 500
+    env.max_steps = math.inf
 else:
     env = gym.make(args.env_name)
 
@@ -69,20 +70,21 @@ while True:
 
     #vels[1] *= 0.85
 
+    #vels[0] = 0.35
+
     obs, reward, done, info = env.step(vels)
     #print('stepCount = %s, reward=%.3f' % (env.stepCount, reward))
 
     env.render()
 
     end_time = time.time()
-    frame_time = 1000 * (end_time - start_time)
-    avg_frame_time = avg_frame_time * 0.95 + frame_time * 0.05
-    max_frame_time = 0.99 * max(max_frame_time, frame_time) + 0.01 * frame_time
-    fps = 1 / (frame_time / 1000)
-
-    print('avg frame time: %d' % int(avg_frame_time))
-    print('max frame time: %d' % int(max_frame_time))
-    print('fps: %.1f' % fps)
+    #frame_time = 1000 * (end_time - start_time)
+    #avg_frame_time = avg_frame_time * 0.95 + frame_time * 0.05
+    #max_frame_time = 0.99 * max(max_frame_time, frame_time) + 0.01 * frame_time
+    #fps = 1 / (frame_time / 1000)
+    #print('avg frame time: %d' % int(avg_frame_time))
+    #print('max frame time: %d' % int(max_frame_time))
+    #print('fps: %.1f' % fps)
 
     if done:
         if reward < 0:
@@ -94,5 +96,7 @@ while True:
 
         load_model()
 
-    #time.sleep(0.1)
-    #time.sleep(0.015)
+    frame_diff = (1 / 30) - (end_time - start_time)
+
+    if frame_diff > 0:
+        time.sleep(frame_diff)

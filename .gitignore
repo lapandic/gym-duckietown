@@ -6,4 +6,4 @@
 xvfb.log
 bin
 
-trained_models
+#trained_models
