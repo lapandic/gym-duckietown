@@ -21,7 +21,7 @@ parser.add_argument('--env-name', default=None)
 parser.add_argument('--map-name', default='udem1')
 parser.add_argument('--no-pause', action='store_true', help="don't pause on failure")
 parser.add_argument('--draw-bbox', default=False)
-parser.add_argument('--log-data', default=True)
+parser.add_argument('--log-data', default=False)
 args = parser.parse_args()
 
 if args.env_name is None:
@@ -34,7 +34,7 @@ else:
     env = gym.make(args.env_name)
 
 if args.log_data is True:
-    env = LoggingWrapper(env)
+    # env = LoggingWrapper(env)
     print("Data logger is being used!")
 
 obs = env.reset()
@@ -122,6 +122,26 @@ def ratiopositive_x(lookAhead_arr):
     return None
 
 
+def inverse_kinematics(env, vel, omega):
+    # Distance between the wheels
+    baseline = env.unwrapped.wheel_dist
+
+    # assuming same motor constants k for both motors
+    k_r = env.k
+    k_l = env.k
+
+    # adjusting k by gain and trim
+    k_r_inv = (env.gain + env.trim) / k_r
+    k_l_inv = (env.gain - env.trim) / k_l
+
+    omega_r = (vel + 0.5 * omega * baseline) / env.radius
+    omega_l = (vel - 0.5 * omega * baseline) / env.radius
+
+    # conversion from motor rotation rate to duty cycle
+    u_r = omega_r * k_r_inv
+    u_l = omega_l * k_l_inv
+    return u_r, u_l
+
 if __name__ == '__main__':
     follow_dist = 0.4  # currently not used
 
@@ -146,10 +166,12 @@ if __name__ == '__main__':
         # ----------------------------------------------
         # omega is determined -> velocity can be determined by the maximum possible commands
 
-        velocity = 0.4
-        omega_steer = velocity * steer_angle #np.tan(steer_angle) / env.wheel_dist
+        velocity = 0.3
+        omega_steer = velocity * steer_angle
 
-        obs, reward, done, info = env.step([velocity, omega_steer])
+        u_r, u_l = inverse_kinematics(env, velocity, omega_steer) #np.tan(steer_angle) / env.wheel_dist
+
+        obs, reward, done, info = env.step([u_r, u_l])
 
         env.render()
 
