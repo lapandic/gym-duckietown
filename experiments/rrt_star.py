@@ -8,6 +8,8 @@ References:
 Path Tracking for a Miniature Robot - http://www8.cs.umu.se/kurser/TDBD17/VT06/utdelat/Assignment%20Papers/Path%20Tracking%20for%20a%20Miniature%20Robot.pdf
 Implementation of the Pure Pursuit Tracking Algorithm: https://www.ri.cmu.edu/pub_files/pub3/coulter_r_craig_1992_1/coulter_r_craig_1992_1.pdf
 """
+import sys
+sys.path.append('../')
 
 import time
 import argparse
@@ -174,6 +176,53 @@ def get_corners_from_coord(i,j):
             rrts.Point((i+1)*ROAD_TILE_SIZE,(j+1)*ROAD_TILE_SIZE),rrts.Point((i+1)*ROAD_TILE_SIZE,j*ROAD_TILE_SIZE)]
 
 
+def get_goal_path():
+    #hack
+    x, _, y = env.cur_pos
+    return [[x,y+1]]
+
+def get_sample_area(start,goal,eps=0.2):
+    #hack
+    xmin = np.min([start[0],goal[0]])
+    xmax = np.max([start[0],goal[0]])
+    ymin = np.min([start[1],goal[1]])
+    ymax = np.max([start[1],goal[1]])
+    return [xmin-eps,xmax+eps,ymin-eps,ymax+eps]
+
+def distance(point1,point2):
+    return np.sqrt((point2[0]-point1[0])**2 +(point2[1]-point1[1])**2)
+
+def get_steer_angle(point1,point2):
+    return np.arctan2(point2[1]-point1[1],point2[0]-point1[0])
+
+def execute_path(path):
+    print('Executing the path!')
+    eps = 0.01
+    for goal_point in path:
+        while distance(goal_point, [env.cur_pos[0],env.cur_pos[2]]) > eps:
+
+            steer_angle = get_steer_angle([env.cur_pos[0],env.cur_pos[2]],goal_point)
+            velocity = 0.3
+            omega_steer = velocity * steer_angle
+
+            u_r, u_l = inverse_kinematics(env, velocity, omega_steer) #np.tan(steer_angle) / env.wheel_dist
+
+            obs, reward, done, info = env.step([u_r, u_l])
+
+            env.render()
+
+            if done:
+                if reward < 0:
+                    print('*** FAILED ***')
+                    if not args.no_pause:
+                        time.sleep(0.7)
+                obs = env.reset()
+                env.render()
+                return False
+
+    return True
+
+
 
 
 if __name__ == '__main__':
@@ -189,29 +238,26 @@ if __name__ == '__main__':
     goals = get_goal_path()
     for goal in goals:
         x, _, y = env.cur_pos
+        start = [x,y]
 
-        sample_area = get_sample_area()
+        sample_area = get_sample_area(start,goal,eps = 0.4)
+        print('*********** RRT* ***********')
+        print('Starting position: ', start)
+        print('Goal position: ', goal)
+        print('Sample area: ', sample_area)
 
-        rrt_star = rrts.RRTStar(start=[x, y], goal=goal,
+        rrt_star = rrts.RRTStar(start=start, goal=goal,
                   sample_area=sample_area, obstacle_list=obstacle_list)
-        path = rrt_star.planner(animation=False)
+        path = rrt_star.planner(animation=True)
+        if path == None:
+            print('No possible paths...')
+            done = False
+        else:
+            print('Calculated path!\n')
+            print('Path: ',path)
+            done = execute_path(path)
 
-        
-        execute_path(path)
+        print('Finished successfully: ', done)
+        print('****************************')
 
-        velocity = 0.3
-        omega_steer = velocity * steer_angle
 
-        u_r, u_l = inverse_kinematics(env, velocity, omega_steer) #np.tan(steer_angle) / env.wheel_dist
-
-        obs, reward, done, info = env.step([u_r, u_l])
-
-        env.render()
-
-        if done:
-            if reward < 0:
-                print('*** FAILED ***')
-                if not args.no_pause:
-                    time.sleep(0.7)
-            obs = env.reset()
-            env.render()

@@ -65,6 +65,7 @@ class RRTStar():
             if animation:
                 self.plot(rand_point)
 
+        #TODO: do we need a stopping criteria? if in the goal region?
         last_idx = self.get_last_index()
         if last_idx == None:
             print('Unsuccessful search')
@@ -111,6 +112,7 @@ class RRTStar():
             path.append([node.point.x, node.point.y])
             last_idx = node.parent
         path.append([self.start.point.x, self.start.point.y])
+        path.reverse()
         return path
 
     def get_last_index(self):
