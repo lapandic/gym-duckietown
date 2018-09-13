@@ -25,8 +25,13 @@ class RRTStar():
         self.gamma = 50.0 #roughly allows space containing more than 2500 drivable tiles?
         # gamma > (2 (1+1/d))^(1/d) (µ(Xfree)/ζd)^(1/d) > 1.1*sqrt(#drivable tiles)
 
+        self.axis = []
+
 
     def planner(self,animation=False):
+        if self._is_collision(self.start) or self._is_collision(self.goal):
+            return None
+
         for i in range(self.max_iter):
             # SampleFree
             rand_point = self.get_random_point()
@@ -69,7 +74,7 @@ class RRTStar():
         last_idx = self.get_last_index()
         if last_idx == None:
             print('Unsuccessful search')
-            return
+            return None
         else:
             path = self.get_final_path(last_idx)
             if animation:
@@ -91,17 +96,25 @@ class RRTStar():
         for obst in self.obstacle_list:
             ax.add_patch(patches.Polygon(obst.get_polygon(), fill = True))
 
+        plt.plot(self.start.point.x, self.start.point.y, "xr")
+
+        if self.axis == []:
+            xmin, xmax = plt.xlim()
+            ymin, ymax = plt.ylim()
+            self.axis = [np.min([xmin,self.xmin]),np.max([xmax,self.xmax]),np.min([ymin,self.ymin]),np.max([ymax,self.ymax])]
+
         if point is not None:
             plt.plot(point.x, point.y, "^k")
+
         for node in self.graph:
             if node.parent is not None:
                 plt.plot([node.point.x, self.graph[node.parent].point.x], [
                          node.point.y, self.graph[node.parent].point.y], "-g")
 
 
-        plt.plot(self.start.point.x, self.start.point.y, "xr")
         plt.plot(self.goal.point.x, self.goal.point.y, "xr")
-        plt.axis(self.sample_area)
+        plt.axis(self.axis)
+
         plt.grid(True)
         plt.pause(0.01)
 
@@ -189,6 +202,7 @@ class RRTStar():
         return False
 
 
+
 class Node():
     """
     Class Node
@@ -260,6 +274,23 @@ class Obstacle():
 def get_vector(point1,point2):
     return [point2.x-point1.x,point2.y-point1.y]
 
+def draw_obstacles(obstacle_list,point=Point(0,0),angle=0):
+    """
+    Draw Graph
+    """
+    plt.clf()
+    fig = plt.figure(1)
+    ax = fig.add_subplot(111, aspect='equal')
+
+    for obst in obstacle_list:
+        ax.add_patch(patches.Polygon(obst.get_polygon(), fill = True))
+
+    plt.plot(point.x, point.y, "xr")
+    plt.quiver(point.x,point.y,np.cos(angle)*10,np.sin(angle)*10)
+    plt.grid(True)
+    plt.pause(0.01)
+
+
 
 
 
@@ -271,6 +302,8 @@ def main():
     y = 0.1
     obstacle_list = [Obstacle([Point(1,1),Point(1,2),Point(2,2),Point(2,1)]),
                      Obstacle([Point(3.5,3.4),Point(3.3,4.8),Point(5,4.7),Point(4.9,3.6)])]
+
+    #draw_obstacles(obstacle_list,Point(x,y),0)
 
     rrt_star = RRTStar(start=[x, y], goal=[3, 5],
               sample_area=[-2, 8, -2, 8], obstacle_list=obstacle_list)

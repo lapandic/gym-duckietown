@@ -161,7 +161,7 @@ def get_obstacles(env):
     for j in range(env.grid_height):
         for i in range(env.grid_width):
             if env._get_tile(i,j)["drivable"] == False:
-                obstacle_list.append(rrts.Obstacle(get_corners_from_coord(i,j)))
+                obstacle_list.append(rrts.Obstacle(get_corners_from_coord(j,i)))
 
     return obstacle_list
 
@@ -176,10 +176,10 @@ def get_corners_from_coord(i,j):
             rrts.Point((i+1)*ROAD_TILE_SIZE,(j+1)*ROAD_TILE_SIZE),rrts.Point((i+1)*ROAD_TILE_SIZE,j*ROAD_TILE_SIZE)]
 
 
-def get_goal_path():
+def get_goal(step_forward = 0.5,step_left = 0.1):
     #hack
-    x, _, y = env.cur_pos
-    return [[x,y+1]]
+    pose = coordinate_corr(env.cur_pos, env.cur_angle)
+    return [pose[0]+np.cos(pose[2])*step_forward,pose[1]+np.sin(pose[2])*step_left]
 
 def get_sample_area(start,goal,eps=0.2):
     #hack
@@ -193,15 +193,17 @@ def distance(point1,point2):
     return np.sqrt((point2[0]-point1[0])**2 +(point2[1]-point1[1])**2)
 
 def get_steer_angle(point1,point2):
-    return np.arctan2(point2[1]-point1[1],point2[0]-point1[0])
+    return np.arctan2(point2[1]-point1[1],point2[0]-point1[0])-np.pi/2.0
 
 def execute_path(path):
     print('Executing the path!')
-    eps = 0.01
+    eps = 0.05
     for goal_point in path:
-        while distance(goal_point, [env.cur_pos[0],env.cur_pos[2]]) > eps:
+        dist = distance(goal_point, get_current_pos())
+        while dist > eps:
 
-            steer_angle = get_steer_angle([env.cur_pos[0],env.cur_pos[2]],goal_point)
+            steer_angle = get_steer_angle(get_current_pos(),goal_point)
+            print('Distance: ',dist, '  Steering angle: ',np.rad2deg(steer_angle))
             velocity = 0.3
             omega_steer = velocity * steer_angle
 
@@ -220,9 +222,12 @@ def execute_path(path):
                 env.render()
                 return False
 
+            dist = distance(goal_point, get_current_pos())
+
     return True
 
-
+def get_current_pos():
+    return [env.cur_pos[2],env.cur_pos[0]]
 
 
 if __name__ == '__main__':
@@ -230,15 +235,27 @@ if __name__ == '__main__':
 
     obstacle_list = get_obstacles(env)
 
+    set_abs = True
     # ----------------------------------------------
     # RRT Star:
     # ----------------------------------------------
     # GET Trajectory
 
-    goals = get_goal_path()
-    for goal in goals:
-        x, _, y = env.cur_pos
-        start = [x,y]
+    #goals = get_goal_path()
+    while True:
+        start = get_current_pos()
+        print('Starting position: ', start)
+        print('Starting angle: ',env.cur_angle)
+        rrts.draw_obstacles(obstacle_list,rrts.Point(start[0],start[1]),env.cur_angle +np.pi/2.0)
+
+        if set_abs:
+            x = float(input('Set goal x:'))
+            y = float(input('Set goal y:'))
+            goal = [x,y]
+        else:
+            step_forward = float(input('Set step_forward:'))
+            step_left = float(input('Set step_left:'))
+            goal = get_goal(step_forward,step_left)
 
         sample_area = get_sample_area(start,goal,eps = 0.4)
         print('*********** RRT* ***********')
@@ -247,7 +264,7 @@ if __name__ == '__main__':
         print('Sample area: ', sample_area)
 
         rrt_star = rrts.RRTStar(start=start, goal=goal,
-                  sample_area=sample_area, obstacle_list=obstacle_list)
+                  sample_area=sample_area, obstacle_list=obstacle_list,steer_step=0.1,d=0.01,max_iter=50)
         path = rrt_star.planner(animation=True)
         if path == None:
             print('No possible paths...')
