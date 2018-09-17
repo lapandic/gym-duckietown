@@ -290,6 +290,29 @@ def draw_obstacles(obstacle_list,point=Point(0,0),angle=0):
     plt.grid(True)
     plt.pause(0.01)
 
+    return fig
+
+
+def draw_path(path,point,angle,d,theta,step,dist):
+    """
+    Draw Path
+    """
+    plt.clf()
+    for i in range(len(path)):
+        plt.plot(path[i][0],path[i][1],"ob")
+        if i == 0: continue
+        if i == step:
+            plt.plot([path[i-1][0],path[i][0]],[path[i-1][1],path[i][1]],"-g")
+        else:
+            plt.plot([path[i-1][0],path[i][0]],[path[i-1][1],path[i][1]],"-k")
+
+    s = "D_error = " + str(d) + " theta_error = " + str(theta) + " D_to_next_pt = " + str(dist)
+    plt.title(s)
+    plt.plot(point.x, point.y, "xr")
+    plt.quiver(point.x,point.y,np.cos(angle)*10,np.sin(angle)*10)
+    plt.grid(True)
+    plt.pause(0.01)
+
 
 
 

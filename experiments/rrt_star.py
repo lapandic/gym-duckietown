@@ -192,22 +192,126 @@ def get_sample_area(start,goal,eps=0.2):
 def distance(point1,point2):
     return np.sqrt((point2[0]-point1[0])**2 +(point2[1]-point1[1])**2)
 
-def get_steer_angle(point1,point2):
+def get_desired_angle(point1,point2):
     return np.arctan2(point2[1]-point1[1],point2[0]-point1[0])-np.pi/2.0
+
+# def get_velocities(env,x_ref,y_ref,theta_ref):
+#     L =  env.unwrapped.wheel_dist/2.0
+#     R = env.radius
+#     x,y = get_current_pos()
+#     theta = env.cur_angle + np.pi/2.0
+#     delta_time = 1.0/ env.frame_rate
+#     u_r = ((x - x_ref)*( x_ref + np.cos(theta_ref)) + (y - y_ref)*(y_ref + np.sin(theta_ref)) + (theta - theta_ref)*2.0/delta_time)*L/R
+#     u_l = ((x - x_ref)*(-x_ref + np.cos(theta_ref)) + (y - y_ref)*(y_ref + np.sin(theta_ref)) + (theta - theta_ref)*2.0/delta_time)*L/R
+#     return u_r,u_l
+
+def get_vel_and_omega(env,start,goal,velocity,step,executed_vels,prev_error_d,prev_error_theta):
+    integral_d = 0
+    integral_theta = 0
+    x1,y1 = start
+    x2,y2 = goal
+    x,y = get_current_pos()
+    theta = np.mod(env.cur_angle + np.pi/2.0,2*np.pi)
+    if theta > np.pi:
+        theta -= 2*np.pi
+    theta_ref = np.arctan2(y2-y1,x2-x1)
+    print('Theta =  ',np.rad2deg(theta), ' Theta_ref = ', np.rad2deg(theta_ref))
+
+    error_theta = theta_ref - theta
+
+    error_d = np.abs((y2-y1)*x - (x2-x1)*y + x2*y1 - y2*x1)/np.sqrt((y2-y1)**2 + (x2-x1)**2)
+
+    print('Error_d = ',error_d, ' error_theta = ',np.rad2deg(error_theta))
+
+    delta_time = 1.0/ env.frame_rate
+
+    #coefficients taken from lane controller node param file
+    k_d = -3.5
+    k_theta = -1*15
+    k_Id = 1*10
+    k_Itheta = 0
+
+    #magic coefficient
+    k_omega = 4.75
+    
+    if step > 0:
+        integral_d = error_d * delta_time
+        integral_theta = error_theta * delta_time
+
+    integral_d_top_cutoff = 1
+    integral_d_bottom_cutoff = -1
+    integral_theta_top_cutoff = 1.2
+    integral_theta_bottom_cutoff = -1.2
+
+    if integral_d > integral_d_top_cutoff:
+        integral_d = integral_d_top_cutoff
+    if integral_d < integral_d_bottom_cutoff:
+        integral_d = integral_d_bottom_cutoff
+    
+    if integral_theta > integral_theta_top_cutoff:
+        integral_theta = integral_theta_top_cutoff
+    if integral_theta < integral_theta_bottom_cutoff:
+        integral_theta = integral_theta_bottom_cutoff
+    
+    if abs(error_d) <= 0.011:  # TODO: replace '<= 0.011' by '< delta_d' (but delta_d might need to be sent by the lane_filter_node.py or even lane_filter.py)
+        integral_d = 0
+    if abs(error_theta) <= 0.051:  # TODO: replace '<= 0.051' by '< delta_phi' (but delta_phi might need to be sent by the lane_filter_node.py or even lane_filter.py)
+        integral_theta = 0
+    if np.sign(error_d) != np.sign(prev_error_d):  # sign of error changed => error passed zero
+        integral_d = 0
+    if np.sign(error_theta) != np.sign(prev_error_theta):  # sign of error changed => error passed zero
+        integral_theta = 0
+    if executed_vels[0] == 0 and executed_vels[1] == 0:  # if actual velocity sent to the motors is zero
+        integral_d = 0
+        integral_theta = 0
+
+
+    omega = -k_omega*(k_d * error_d + k_theta * error_theta - k_Id * integral_d  - k_Itheta * integral_theta)
+
+    #if velocity - 0.5 * np.fabs(omega) * 0.1 < 0.065:
+    #   velocity = 0.065 + 0.5 * np.fabs(omega) * 0.1
+
+    omega_max = 999
+    omega_min =-999
+    if omega > omega_max: omega = omega_max
+    if omega < omega_min: omega = omega_min
+
+    return velocity, omega, error_d, error_theta
+
+def get_omega_steer(desired_angle):
+    delta_time = 1.0/ env.frame_rate
+    current_angle = env.cur_angle + np.pi/2.0
+    return (desired_angle-current_angle)/delta_time
 
 def execute_path(path):
     print('Executing the path!')
-    eps = 0.05
-    for goal_point in path:
-        dist = distance(goal_point, get_current_pos())
-        while dist > eps:
+    eps = 0.02
+    executed_vels = [0,0]
+    prev_error_d = 0
+    prev_error_theta = 0
+    for i in range(len(path)):
+        if i == 0:
+            x,y = get_current_pos()
+            start = [x,y]
+        else:
+            start = path[i-1]
 
-            steer_angle = get_steer_angle(get_current_pos(),goal_point)
-            print('Distance: ',dist, '  Steering angle: ',np.rad2deg(steer_angle))
-            velocity = 0.3
+        goal = path[i]
+        dist = distance(goal, get_current_pos())
+        step = 0
+
+        while dist > eps:
+            current_pos = get_current_pos()
+            desired_angle = get_desired_angle(current_pos,goal)
+            steer_angle = ratiopositive_x(goal)
+            print('Distance: ',dist, '  Desired angle: ',np.rad2deg(desired_angle), ' Steer angle: ', np.rad2deg(steer_angle))
+            velocity = 0.5
+            #omega_steer = get_omega_steer(desired_angle)
             omega_steer = velocity * steer_angle
 
-            u_r, u_l = inverse_kinematics(env, velocity, omega_steer) #np.tan(steer_angle) / env.wheel_dist
+            #u_r, u_l = inverse_kinematics(env, velocity, omega_steer) #np.tan(steer_angle) / env.wheel_dist
+            velocity, omega, prev_error_d, prev_error_theta = get_vel_and_omega(env,start,goal,velocity,step,executed_vels, prev_error_d, prev_error_theta)
+            u_r, u_l = inverse_kinematics(env, velocity, omega)
 
             obs, reward, done, info = env.step([u_r, u_l])
 
@@ -222,12 +326,21 @@ def execute_path(path):
                 env.render()
                 return False
 
-            dist = distance(goal_point, get_current_pos())
+            dist = distance(goal, get_current_pos())
+            step += 1
+            executed_vels = [u_r,u_l]
+            rrts.draw_path(path,rrts.Point(current_pos[0],current_pos[1]),env.cur_angle +np.pi/2.0,prev_error_d,prev_error_theta,i,dist)
 
     return True
 
 def get_current_pos():
     return [env.cur_pos[2],env.cur_pos[0]]
+
+
+goal_pose = [0,0]
+def onclick(event):
+    global goal_pose
+    goal_pose = [event.xdata, event.ydata]
 
 
 if __name__ == '__main__':
@@ -246,12 +359,12 @@ if __name__ == '__main__':
         start = get_current_pos()
         print('Starting position: ', start)
         print('Starting angle: ',env.cur_angle)
-        rrts.draw_obstacles(obstacle_list,rrts.Point(start[0],start[1]),env.cur_angle +np.pi/2.0)
+        fig = rrts.draw_obstacles(obstacle_list,rrts.Point(start[0],start[1]),env.cur_angle +np.pi/2.0)
 
         if set_abs:
-            x = float(input('Set goal x:'))
-            y = float(input('Set goal y:'))
-            goal = [x,y]
+            cid = fig.canvas.mpl_connect('button_press_event', onclick)
+            fig.waitforbuttonpress()
+            goal = goal_pose
         else:
             step_forward = float(input('Set step_forward:'))
             step_left = float(input('Set step_left:'))
